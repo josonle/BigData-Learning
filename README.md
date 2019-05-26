@@ -1,5 +1,5 @@
 # BigData-Learning
-<<<<<<< HEAD
+
 [Coding Now](https://github.com/josonle/Coding-Now)那个项目规划的太乱了，所以想着把自己大数据相关的东西单独提出了，所以本项目只是记录自己的心得和看过的一些资源吧，至于平时看过的比较好的文章还是会放到Coding Now中
 
 > “古今之成大事业、大学问者，必经过三种之境界：‘昨夜西风凋碧树。独上高楼，望尽天涯路’。此第一境也。‘[衣带渐宽终不悔](https://www.baidu.com/s?wd=%E8%A1%A3%E5%B8%A6%E6%B8%90%E5%AE%BD%E7%BB%88%E4%B8%8D%E6%82%94&tn=SE_PcZhidaonwhc_ngpagmjz&rsv_dl=gh_pc_zhidao)，为伊消得人憔悴。’此第二境也。‘[众里寻他千百度](https://www.baidu.com/s?wd=%E4%BC%97%E9%87%8C%E5%AF%BB%E4%BB%96%E5%8D%83%E7%99%BE%E5%BA%A6&tn=SE_PcZhidaonwhc_ngpagmjz&rsv_dl=gh_pc_zhidao)，蓦然回首，那人却在，灯火阑珊处’。此第三境也。”
@@ -49,8 +49,8 @@
 
 ## Hive篇
 
-- [Hive回顾一](https://github.com/josonle/BigData-Learning/blob/86368ba5b14058218e02a7758e20daf14fa3809d/Hive/Hive%E5%9B%9E%E9%A1%BE%E4%B8%80.md)
-- [Hive回顾二](https://github.com/josonle/BigData-Learning/blob/86368ba5b14058218e02a7758e20daf14fa3809d/Hive/HIve%E5%9B%9E%E9%A1%BE%E4%BA%8C.md)
+- [Hive回顾一](https://github.com/josonle/BigData-Learning/blob/master/Hive/Hive%E5%9B%9E%E9%A1%BE%E4%B8%80.md)
+- [Hive回顾二](https://github.com/josonle/BigData-Learning/blob/master/Hive/Hive%E5%9B%9E%E9%A1%BE%E4%BA%8C.md)
 - [Hive面试该准备些什么?](https://github.com/josonle/BigData-Learning/blob/master/Hive/Hive%E9%9D%A2%E8%AF%95%E8%AF%A5%E5%87%86%E5%A4%87%E4%BA%9B%E5%95%A5%EF%BC%9F.md)
 - [Hive simple easy learning](https://www.tutorialspoint.com/hive/index.htm)
   - 国外的hive入门学习教程，还能练习HQL（不足就是要学好English，O(∩_∩)O哈哈~）
@@ -66,6 +66,4 @@
 ## Spark篇
 
 - [Learning Spark项目](https://github.com/josonle/Learning-Spark)
-
-=======
->>>>>>> b50faae65c9bb04f4aff66089282701c1b980960
+- [《Spark The Definitive Guide Learning》Spark权威指南学习心得、笔记](https://github.com/josonle/Spark-The-Definitive-Guide-Learning)
