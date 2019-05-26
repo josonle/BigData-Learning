@@ -1,0 +1,62 @@
+kafak文章：
+https://blog.csdn.net/lizhitao/article/details/39499283
+http://orchome.com/kafka/index
+
+https://www.bilibili.com/video/av47292875/?p=196
+
+
+Hive元数据存储在MySQL这类关系型数据库中，一般实际运用时会有两个MySQL（Active MySQL、Standby MySQL，主备避免MySQL挂掉了元数据全没了）
+
+https://blog.csdn.net/u010626937/article/details/53561479
+
+Hive on spark是Hive社区维护的，spark sql是spark社区维护的
+
+Spark SQL社区定义的是一种处理结构化数据的spark组件模快，可以使用spark程序、SQL或DataFrame API处理，支持形如java、scala、python、r等多种语言（最新微软引入了C#）
+
+总的来说：
+- Spark SQL并非仅仅是为了像Hive一样只使用SQL，还提供了DataFrame/DataSet API，即SQL只是部分功能
+- 集成Hive，可以直接将SQL、HQL语句运行在spark仓库上
+- 统一外部数据源访问，外部数据源包括Hive、parquet、ORC、json、jdbc等
+- 支持标准的JDBC、ODBC连接
+
+
+
+### 编译spark
+
+**使用Maven**，[参考文档](http://spark.apache.org/docs/latest/building-spark.html)
+
+spark内置了一个maven，在spark的build目录下（也有sbt）
+
+如图，选择下载源码时才需要编译，其他pre-build是预编译版本，但开发时多是根据自己情况自己编译的。
+
+![](assets/深度截图_选择区域_20190509104840.png)
+
+- Building Spark using Maven requires Maven 3.5.4 and Java 8.
+- Maven要提前设置内存，`export MAVEN_OPTS="-Xmx2g -XX:ReservedCodeCacheSize=512m"`（如果使用内置的mvn该参数自动加上）
+- 然后是编译命令，总的是`./build/mvn -DskipTests clean package`，但根据你的环境还要加上其他参数，像hadoop版本、是否支持hive、jdbc、集群管理是yarn还是mesos等等
+
+```
+# 指明hadoop版本，yarn，
+./build/mvn -Pyarn -Phive -Phive-thriftserver -Phadoop-2.6 -Dhadoop.version=hadoop-2.6.0-cdh5.12.1 -DskipTests clean package
+```
+
+不指定这些参数的话，会用的spark目录下pom.xml中默认的，类似如下
+
+![1557371199457](assets/1557371199457.png)
+
+- 然后等待编译完就行了
+
+如果你想编译成一个可运行的tgz包，参考文档中
+
+```
+# 没选择支持python、r
+./dev/make-distribution.sh --name custom-spark --tgz -Phadoop-2.6 -Dhadoop.version=hadoop-2.6.0-cdh5.12.1 -Phive -Phive-thriftserver -Pyarn -Pmesos
+```
+
+> 这个tgz包和官网上直接下的预编译包是一样用的
+
+#### 编译问题
+
+- pom.xml中没有cdh的仓库，要自己添加一个
+- 编译命令后加上`-X`可以查看详细错误信息
+- 指定scala版本问题

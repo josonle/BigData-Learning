@@ -1,0 +1,58 @@
+{
+    "created_time": "2019-05-16T04:14:12Z",
+    "files": [
+        {
+            "attachment_folder": "",
+            "attachments": [
+            ],
+            "created_time": "2019-05-16T04:14:12Z",
+            "modified_time": "2019-05-16T04:14:12Z",
+            "name": "ZooKeeper学习资源.md",
+            "tags": [
+            ]
+        },
+        {
+            "attachment_folder": "",
+            "attachments": [
+            ],
+            "created_time": "2019-05-16T04:14:12Z",
+            "modified_time": "2019-05-16T04:14:12Z",
+            "name": "分布式一致性原理.md",
+            "tags": [
+            ]
+        },
+        {
+            "attachment_folder": "",
+            "attachments": [
+            ],
+            "created_time": "2019-05-16T04:14:12Z",
+            "modified_time": "2019-05-19T07:27:50Z",
+            "name": "初窥门径ZooKeeper.md",
+            "tags": [
+            ]
+        },
+        {
+            "attachment_folder": "",
+            "attachments": [
+            ],
+            "created_time": "2019-05-16T04:14:12Z",
+            "modified_time": "2019-05-21T10:30:00Z",
+            "name": "渐入佳境ZooKeeper.md",
+            "tags": [
+            ]
+        },
+        {
+            "attachment_folder": "",
+            "attachments": [
+            ],
+            "created_time": "2019-05-16T04:14:12Z",
+            "modified_time": "2019-05-16T04:14:12Z",
+            "name": "登堂入室ZooKeeper.md",
+            "tags": [
+            ]
+        }
+    ],
+    "sub_directories": [
+    ],
+    "version": "1"
+}
