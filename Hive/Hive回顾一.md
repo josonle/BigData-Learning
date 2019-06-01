@@ -264,7 +264,39 @@ load是移动数据的操作，只是文件的移动或重命名，速度快，i
 > 其实，表创建好后不会用到对表的修改，毕竟可能会被其他事务引用到，一修改问题就大了。所以通常要修改时都采取重创建的方法
   
 ### 查询相关连的DML
+看官方文档可以发现，他们吧查询从DML中专门给拎出来了，但像关系型数据库Mysql这些是把select算入DML的，所以我这里也归在一起
 
+#### select基本语法结构
+文档在此：<https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Select>
+
+```sql
+[WITH CommonTableExpression (, CommonTableExpression)*]    (Note: Only available starting with Hive 0.13.0)
+SELECT [ALL | DISTINCT] select_expr, select_expr, ...
+  FROM table_reference
+  [WHERE where_condition]
+  [GROUP BY col_list]
+  [ORDER BY col_list]
+  [CLUSTER BY col_list
+    | [DISTRIBUTE BY col_list] [SORT BY col_list]
+  ]
+ [LIMIT [offset,] rows]
+```
+- select_expr是查询表达式，就是字段、表达式这些
+- 基本和SQL标准语法一样，除了`cluster by/distribute by/sort by`，还有一个`partition by`
+- `limit rows`同mysql中一样，限制select返回的行数。像`limit 3`是返回前三行，`limit 2,4`是第三行到第六行的查询记录
+- 还有一个不同于标准SQL的用法就是分区表可以在where或者join on的条件处使用分区字段进行查询
+> 文档上提出了一个分区修剪（partition pruning）的概念，相关查询可以执行分区修剪，并且是只扫描与查询指定的分区相关的表的一小部分。
+> 这也是分区表设计的目的，避免了全表扫描的开销。具体怎么个用法，就像用表的字段过滤一样，都支持`and、or`、`=、>、<、<>、>=、<=`、`like`，比如说分区字段date、country
+> ```sql
+> select * from a join b 
+> on (a.id=b.id and a.date>='2019-05-29' and a.country like 'china');
+> ```
+
+#### 聊聊聚合 group by
+
+#### Order, Sort, Cluster 和 Distribute By
+
+***
 读[hive窗口函数进阶指南](https://mp.weixin.qq.com/s/JIJCtl63eGld5dhu3s-jZw)
 [Hive（六）内置函数与高级操作](https://www.cnblogs.com/frankdeng/p/9139347.html)
 [Hive（七）Hive分析窗口函数](https://www.cnblogs.com/frankdeng/p/9139366.html)
