@@ -225,7 +225,7 @@ load是移动数据的操作，只是文件的移动或重命名，速度快，i
 
   - 设置了分桶的表要插入数据需要设置属性`hive.enforce.bucketing=true`，因为分桶默认是不开启的
 
-  - 分桶表不能直接通过load加载数据，而是要创建一张中间表tmp_table，将数据load加载到中间表，然后通过`insert into bucket_table select * from tmp_table;`
+  - 分桶表不能直接通过load加载数据（因为load只是copy一份文件到指定目录下 ，而分桶会根据字段有多个文件产生），而是要创建一张中间表tmp_table，将数据load加载到中间表，然后通过`insert into bucket_table select * from tmp_table;`
 
   - 分桶抽样tablesample语句，`select * from bucket_table tablesample(bucket x out of y [on col])`
 
@@ -294,7 +294,36 @@ SELECT [ALL | DISTINCT] select_expr, select_expr, ...
 
 #### 聊聊聚合 group by
 
-#### Order, Sort, Cluster 和 Distribute By
+#### Order, Sort, Distribute 和 Cluster By
+
+|               |         功能         |                                                   特点                                                   |
+| :-----------: | -------------------- | -------------------------------------------------------------------------------------------------------- |
+|   order by    | 全局排序              | 一个Reduce、默认升序Asc                                                                                    |
+|    sort by    | 局部排序              | Reduce内部排序，要设置好Reduce个数(`mapreduce.job.reducers`)                                                 |
+| distribute by | 按字段分区(partition) | 多和sort by合用，起到分区排序，且必须写在sort by前。根据reduce个数产生多个文件，不修改reduce个数默认一个分区？？？ |
+|   cluster by  | 分区+排序             | distribute by和sort by的字段相同时，**只有倒序排序**                                                        |
+
+reduce的个数默认是-1，会根据Hql语句进行优化调整，可通过`set mapreduce.job.reduces;`（`mapred.reduce.task`也可用来设置reduce个数）查看
+
+- distribute by应用场景
+![](assets/20190604234124884_1984899530.png)
+> 小文件合并：设置一个reduce任务`set mapred.reduce.task=1;`，然后对某些字段distribute by，insert新表即可
+> 大文件切分：设置多个reduce任务，然后对某些字段distribute by即可
+
+sort by遇到设置多个reduce时，也会产生多个文件，但它并非按照某个字段进行分区，仅仅是随机分散到不同文件中避免数据倾斜的产生
+
+#### union all 合并表
+像关系型数据库中还有union（重复字段去重），但Hive只支持union all，用法同关系型数据库中用法，但有些许不同
+```sql
+select * from(
+  select col1,col2 from t1
+  union all
+  select col1,col3 as col2 from t2
+)tmp;
+```
+- 要union的表的字段名、字段类型、字段个数都要一样
+- 子查询中合并的表一定要有别名（tmp），否则报错。一般使用表查询最好都跟一个别名
+- 但像要合并表的子查询不能使用别名（即select col1,col2 from t1不能括起来加个别名）
 
 ***
 读[hive窗口函数进阶指南](https://mp.weixin.qq.com/s/JIJCtl63eGld5dhu3s-jZw)
