@@ -72,18 +72,69 @@ Array通过下标来取数据（a[0]），Map通过key（m[key]），struct通�
 就像max、min、mean、avg这些常用的
 
 ### 特殊函数（窗口函数、分析函数、混合函数）
-- 窗口函数`over()`，括号内可以指定分区字段（distribute by/partition by）、排序字段（sort by/order by），还可以通过`row between xxx and xxx`指定窗口大小
-  - 窗口大小选项：current row（当前行）、preceding/following n（前/后n行）、unbounded precending/following（到最前起点/最后终点）
-  - `聚合函数 +over`，只对前面的聚合函数有效，select子句中可以有多个含窗口的函数
-- `lag(col,n) +over`，向前取第n条数据
-- `lead(col,n) +over`，向后取第n条数据
-- `nitle(n) +over`，将有序分区的行分发到不同组中，对于每一行它所属返回组的编号（从1开始）。（n为整数）
+- `over()`子句，括号内可以指定分区字段（distribute by/partition by）、排序字段（sort by/order by），还可以通过`rows between xxx and xxx`指定窗口大小
+  - 窗口大小选项：current row（当前行）、n preceding/following（前/后n行）、unbounded precending/following（到最前起点/最后终点）
+  > 具体一点的窗口大小规范语法如下：
+  > ```
+  > (ROWS | RANGE) BETWEEN (UNBOUNDED | [num]) PRECEDING AND ([num] PRECEDING | CURRENT ROW | (UNBOUNDED | [num]) FOLLOWING)
+  > (ROWS | RANGE) BETWEEN CURRENT ROW AND (CURRENT ROW | (UNBOUNDED | [num]) FOLLOWING)
+  > (ROWS | RANGE) BETWEEN [num] FOLLOWING AND (UNBOUNDED | [num]) FOLLOWING
+  > ```
+  > 举例
+  > ```
+  > BETWEEN 4 PRECEDING AND CURRENT ROW //当前行和前4行（共5行）
+  > BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING //当前行到分区结束的所有行
+  > BETWEEN 4 PRECEDING AND 1 FOLLOWING //当前行+前4行+后1行（共6行）
+  > ```
+  - 如果是order by后缺少窗口大小，则默认是`rows between unbounded precending and current row`
+  - 如果缺少order by和窗口大小，则默认是`rows between unbounded precending and unbounded following`（即整个表）
+  - `聚合函数 +over`，只对前面的聚合函数有效，select子句中可以有多个含窗口的函数。SQL标准中来的，允许所有聚合函数+over构成窗口函数
+  - `窗口/分析 +over`
+  - Hive 2.1.0后，over子句中也支持聚合函数；Hive 2.1.0后聚合函数支持distinct，但over中有order by或窗口限制时不支持；Hive 2.2.0后，在使用over有order by或者窗口大小限制时，聚合函数支持使用distinct
+- 窗口函数
+  - `lag(col,n,[default]) +over`，向前取第n条数据（默认n为1），可选参数default表示如果返回结果是null则用default值代替
+  - `lead(col,n,[default]) +over`，向后取第n条数据（默认n为1），可选参数default表示如果返回结果是null则用default值代替
+  - `first_value/last_value`，分区排序后第一条/最后一条数据
+    - `last_value`使用时有个坑，就是**要明确指定窗口大小为整个分区窗口大小**`betwwen unbounded precending and unbounded following` 才能取到正确的最后一条数据，否则它会以unbounded precending到current row为窗口
+    > `first_value(id) over(partition by id order by id) first`
+    > `last_value(id) over(partition by id order by id) last_no`
+    > `last_value(id) over(partition by id order by id between unbounded precending and unbounded following) last`
+    > | id  | first | last_no | last |
+    > | --- | ----- | ------- | ---- |
+    > | 1   | 1     | 1       | 3    |
+    > | 2   | 1     | 2       | 3    |
+    > | 3   | 1     | 3       | 3    |
+
+
+- 分析函数
+  - `row_number`，返回分区内记录的序列，从1开始，排名不存在相等
+  - `rank`，返回分区内该数据的排名，排名相同会在名次中留下空位
+  - `dense_rank`，同上，但排名相同不会在名次中留下空位
+  > 举例，如下class分区内，score的排序序列
+  >|class | score    |row_numbr     |rank     |dense_rank     |
+  > |:-:| :-: | :-: | :-: | :-: |
+  >|A |  1   |1     |   1  |1     |
+  >|A |    2 |  2   |     2|  2   |
+  >|A |     2|    3 |     2|    2 |
+  >|A |     3|    4 |     4|     3|
+  >|B|2|1|1|1|
+  >|B|3|2|2|2|
+  >|B|4|3|3|3|
+  - `percent_rank`，返回 (分区内当前行的rank值-1)/(分区内总行数-1)，这里的rank值是组内排名序号（rank函数返回值）
+  - `cume_dist`，小于等于当前值的行数除以分区内总行数
+  - `ntile(n)`，将有序分区的行分发到不同组中，返回每一行它所属的组的编号（从1开始）。（n为整数）
+    - 用于取数据的百分比，比如返回前百分之二十的数据，可以分成5组，取第一组即可
+
+参考：
+- [Hive 窗口函数、分析函数](https://www.cnblogs.com/skyEva/p/5730531.html)
+- [Hive常用函数大全（二）（窗口函数、分析函数、增强group）](https://blog.csdn.net/scgaliguodong123_/article/details/60135385)
 ## 自定义函数
 自定义函数包含三种UDF（一进一出）、UDAF（自定义聚合函数，多进一出）、UDTF（自定义表函数，一进多出）
 > <https://cwiki.apache.org/confluence/display/Hive/HivePlugins>
 
+### UDF（map阶段）
 - 继承 `org.apache.hadoop.hive.ql.UDF` 类
-- 实现UDF类的evaluate函数，就是这个函数实现你的业务逻辑
+- 实现UDF类的evaluate函数，就是这个函数实现你的业务逻辑。其次，evaluate函数支持重载，所以你一个类里可以有多个重载的包含不同业务逻辑的evaluate函数，调用时通过参数个数、类型、返回值来区分
   - 函数必须有返回值，哪怕是null
   - 打jar包
 - 在hive命令行创建临时函数
@@ -91,8 +142,12 @@ Array通过下标来取数据（a[0]），Map通过key（m[key]），struct通�
   - `create temporary function function_name as class_name;`，function_name是定义的函数名（不一定和jar包中那个函数同名），class_NAME是上面那个函数的权限类名（就是包名）
 
 
-### UDF（map阶段）
-
 ### UDAF（reduce阶段）
+参考：
+- [Hive UDAF开发--个人补充理解](https://blog.csdn.net/w124374860/article/details/81021474)
+- [Hive自定义函数(UDF、UDAF)](https://blog.csdn.net/scgaliguodong123_/article/details/46993005)
+
+这里顺便补充一下[spark中定义hive的udf、udaf](https://blog.csdn.net/bb23417274/article/details/87976136)
+
 ## 命令
 - 修复表：`msck repair table table_name`，有时像直接将数据上传到仓库的中作为一个分区，但没有相应元数据信息，可以修复表添加相应元数据信息
