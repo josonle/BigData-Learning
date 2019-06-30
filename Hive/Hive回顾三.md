@@ -1,0 +1,256 @@
+# Hive回顾三
+## explain 查看执行计划
+同MySQL一样，就是在Hql语句前加上explain关键字
+## 调优
+> Hive配置属性[可参考文档](https://www.docs4dev.com/docs/zh/apache-hive/3.1.1/reference/Configuration_Properties.html#hive%E9%85%8D%E7%BD%AE%E5%B1%9E%E6%80%A7)
+
+- MapReduce方面调优
+- Hive方面调优，如不经过MR来计算
+
+查看Hive可以配置的相关属性（**在conf目录下的hive-default.xml.template文件中可查**）
+
+### 1. 不经过MR查询，直接fetch数据
+
+```xml
+<property>
+    <name>hive.fetch.task.conversion</name>
+    <value>more</value>
+    <description>
+      Expects one of [none, minimal, more].
+      Some select queries can be converted to single FETCH task minimizing latency.
+      Currently the query should be single sourced not having any subquery and should not have
+      any aggregations or distincts (which incurs RS), lateral views and joins.
+      0. none : disable hive.fetch.task.conversion
+      1. minimal : SELECT STAR, FILTER on partition columns, LIMIT only
+      2. more    : SELECT, FILTER, LIMIT only (support TABLESAMPLE and virtual columns)
+    </description>
+  </property>
+```
+由默认配置可知该属性默认more，适合`select */filter/limit`情况下不通过MapReduce而是直接抓取数据。none是严格MR任务，minimal是低版本的，命令行下查看其默认属性为more，
+
+```
+hive> set hive.fetch.task.conversion;
+hive.fetch.task.conversion=more
+```
+### 2. Hive本地模式运行MR
+
+适合小数据集测试情况，默认是提交到hadoop集群上运行
+虽然是本地模式，但也是走MR任务的
+```xml
+<property>
+    <name>hive.exec.mode.local.auto</name>
+    <value>false</value>
+    <description>Let Hive determine whether to run in local mode automatically</description>
+  </property>
+```
+默认false，可改为`set hive.exec.mode.local.auto=true`
+
+### Join优化
+#### 3. 小表join大表
+小表join大表，小表放左边，可有效避免内存溢出。不过新版本的Hive对大小表join优化了，小表放左放右区别不大
+
+#### 4. map端join（mapjoin）
+根据文件大小自动选择Map端join，将小表全表加载到内存中完成Map端join，可以一定程度上避免reduce端join发生数据倾斜。因为不指定Map join时，Hive解析器会把join操作转为common join。
+```xml
+<property>
+    <name>hive.auto.convert.join</name>
+    <value>true</value>
+    <description>Whether Hive enables the optimization about converting common join into mapjoin based on the input file size</description>
+  </property>
+```
+默认是开启的
+```
+hive> set hive.auto.convert.join;
+hive.auto.convert.join=true
+```
+要使用map join的话，还要设定另外一个参数`hive.mapjoin.smalltable.filesize`，**用来区分大小表**
+```xml
+<property>
+    <name>hive.mapjoin.smalltable.filesize</name>
+    <value>25000000</value>
+    <description>
+      The threshold for the input file size of the small tables; if the file size is smaller 
+      than this threshold, it will try to convert the common join into map join
+    </description>
+  </property>
+```
+### 5. 尽量避免笛卡尔积
+
+Hive默认是设置成了严格模式，即不支持笛卡尔积。因为Hive处理笛卡尔积时只会使用一个Reduce来完成
+```
+hive> set hive.mapred.mode;
+hive.mapred.mode=nonstrict
+```
+> 尽量避免笛卡尔积，join的时候不加on条件，或者无效的on条件，Hive只能使用1个reducer来完成笛卡尔积
+当 Hive 设定为严格模式（hive.mapred.mode=strict）时，不允许在 HQL 语句中出现笛卡尔积， 这实际说明了 Hive 对笛卡尔积支持较弱。因为找不到 Join key，Hive 只能使用 1 个 reducer 来完成笛卡尔积。
+当然也可以使用 limit 的办法来减少某个表参与 join 的数据量，但对于需要笛卡尔积语义的 需求来说，经常是一个大表和一个小表的 Join 操作，结果仍然很大（以至于无法用单机处 理），这时 MapJoin才是最好的解决办法。MapJoin，顾名思义，会在 Map 端完成 Join 操作。 这需要将 Join 操作的一个或多个表完全读入内存。
+PS：MapJoin 在子查询中可能出现未知 BUG。在大表和小表做笛卡尔积时，规避笛卡尔积的 方法是，给 Join 添加一个 Join key，原理很简单：将小表扩充一列 join key，并将小表的条 目复制数倍，join key 各不相同；将大表扩充一列 join key 为随机数。
+精髓就在于复制几倍，最后就有几个 reduce 来做，而且大表的数据是前面小表扩张 key 值 范围里面随机出来的，所以复制了几倍 n，就相当于这个随机范围就有多大 n，那么相应的， 大表的数据就被随机的分为了 n 份。并且最后处理所用的 reduce 数量也是 n，而且也不会 出现数据倾斜。
+
+> 严格模式可以禁止三类查询
+> 1）对于分区表，除非where语句中含有分区字段过滤条件来限制范围，否则不允许执行。换句话说，就是用户不允许扫描所有分区。进行这个限制的原因是，通常分区表都拥有非常大的数据集，而且数据增加迅速。没有进行分区限制的查询可能会消耗令人不可接受的巨大资源来处理这个表。
+2）对于使用了order by语句的查询，要求必须使用limit语句。因为order by为了执行排序过程会将所有的结果数据分发到同一个Reducer中进行处理，强制要求用户增加这个LIMIT语句可以防止Reducer额外执行很长一段时间。
+3）限制笛卡尔积的查询。对关系型数据库非常了解的用户可能期望在执行JOIN查询的时候不使用ON语句而是使用where语句，这样关系数据库的执行优化器就可以高效地将WHERE语句转化成那个ON语句。不幸的是，Hive并不会执行这种优化，因此，如果表足够大，那么这个查询就会出现不可控的情况。
+
+### 6. 行列过滤（列裁剪、谓词下推）
+它这个的目的是为了减少处理的数据量，spark sql最后的逻辑计划优化阶段也有这两
+
+列裁剪：过滤掉不需要的列、在select中只选需要的列，如果有，尽量使用分区过滤，少用`select *`
+谓词下推：过滤尽量下沉到数据源。比如两表join，join后再对某表where过滤时，优化时先过滤该表再进行join
+
+### 7. 优化groupBy
+
+相同key会分发到同一个reduce上去，所以可能产生数据倾斜问题。
+- 优化一：可以开启先在Map端聚合，`set hive.map.aggr=true`，默认也是开启了,就相当于MR中在Map过程执行了Combine操作。并设置Map端聚合操作的条数，`hive.groupby.mapaggr.checkinterval`，默认是十万条
+```xml
+<property>
+    <name>hive.map.aggr</name>
+    <value>true</value>
+    <description>Whether to use map-side aggregation in Hive Group By queries</description>
+  </property>
+<property>
+    <name>hive.groupby.mapaggr.checkinterval</name>
+    <value>100000</value>
+    <description>Number of rows after which size of the grouping keys/aggregation classes is performed</description>
+  </property>
+```
+- 优化二：当有数据倾斜时，开启负载均衡，默认是false。`set hive.groupby.skewindata=true`
+```xml
+<property>
+    <name>hive.groupby.skewindata</name>
+    <value>false</value>
+    <description>Whether there is skew in data to optimize group by queries</description>
+  </property>
+```
+开启数据倾斜，会起两个MR Job。第一个Job是为了负载均衡，会把Map的输出结果随机分发到不同Reduce中去，每个Reduce做部分聚合操作，并输出结果，哪怕是相同的Key也可能分发到不同的Reduce中去。第二个Job保证相同的Key的结果最终分布的同一个Reduce中完成聚合
+
+### 8. 动态分区的优化
+配置中有六个相关参数：
+- `hive.exec.dynamic.partition`，开启动态分区，默认true
+- `hive.exec.dynamic.partition.mode`，动态分区模式，默认是严格的（strict，用户必须指定一个静态分区）。非严格模式（nonstrict）允许所有分区字段都是动态的分区。【记得设置为非严格的】
+- `hive.exec.max.dynamic.partitions`，**总共**允许创建的最大动态分区数，默认1000
+- `hive.exec.max.dynamic.ppartitions.pernode`，**每个节点上**允许创建的最大动态分区数，默认100
+- `hive.exec.max.created.files`，一个MR Job中所有mappers、reducers总共允许创建的最大hdfs文件数，默认100000
+- `hive.error.on.empty.partition`，动态分区为空时是否抛出异常，默认false，也无需设置
+```xml
+<property>
+    <name>hive.exec.dynamic.partition</name>
+    <value>true</value>
+    <description>Whether or not to allow dynamic partitions in DML/DDL.</description>
+  </property>
+  <property>
+    <name>hive.exec.dynamic.partition.mode</name>
+    <value>strict</value>
+    <description>
+      In strict mode, the user must specify at least one static partition
+      in case the user accidentally overwrites all partitions.
+      In nonstrict mode all partitions are allowed to be dynamic.
+    </description>
+  </property>
+  <property>
+    <name>hive.exec.max.dynamic.partitions</name>
+    <value>1000</value>
+    <description>Maximum number of dynamic partitions allowed to be created in total.</description>
+  </property>
+  <property>
+    <name>hive.exec.max.dynamic.partitions.pernode</name>
+    <value>100</value>
+    <description>Maximum number of dynamic partitions allowed to be created in each mapper/reducer node.</description>
+  </property>
+  <property>
+    <name>hive.exec.max.created.files</name>
+    <value>100000</value>
+    <description>Maximum number of HDFS files created by all mappers/reducers in a MapReduce job.</description>
+  </property>
+  <property>
+    <name>hive.error.on.empty.partition</name>
+    <value>false</value>
+    <description>Whether to throw an exception if dynamic partition insert generates empty results.</description>
+  </property>
+```
+> 查看分区表相关分区：`show partitions table_name;`
+
+### 9. 合理设置Mapper数
+MR的底层，输入分片数决定了Mapper的个数，而分片大小`long splitSize = Math.max(minSize,Math.min(maxSize, blockSize))`默认是和hdfs默认数据块blockSize一样大（128M）。根据不同情况可以合理增加/减少Mapper的数量
+
+- 增加Mapper数量，大文件拆成小文件，也就是增大上面公式中的maxSzie，但仍旧小于blockSize（128M）。比如`set mapreduce.input.fileinputformat.split.maxsize=100;`
+- 减少Mapper数量，小文件合并减少Map个数，见下文
+
+### 10. 小文件合并
+- [Hive优化之小文件问题及其解决方案](https://blog.csdn.net/lzm1340458776/article/details/43567209)
+- [解决hive表小文件过多问题](https://wchch.github.io/2018/09/06/%E8%A7%A3%E5%86%B3hive%E8%A1%A8%E5%B0%8F%E6%96%87%E4%BB%B6%E8%BF%87%E5%A4%9A%E9%97%AE%E9%A2%98/)
+小文件的影响：NameNode需要更多的内存开销来维护元数据信息，看到网上有说一个元数据大概146B；map数更多，而一个map需要一个jvm来完成，jvm的启动、初始化、执行退出会浪费更多资源
+小文件的产生：1、源数据包含大量小文件；2、动态分区插入数据导致大量小文件；3、reduce数量多造成输出文件越多
+
+在map执行前合并小文件，减少map数：CombineHiveInputFormat具有对小文件进行合并的功能（系统默认的格式）。HiveInputFormat没有对小文件合并功能。
+> Hive的输入文件格式（`hive.input.format`）有：`org.apache.hadoop.hive.ql.io.HiveInputFormat `和`org.apache.hadoop.hive.ql.io.CombineHiveInputFormat`
+```
+set hive.merge.mapfiles = true                   ##在 map only 的任务结束时合并小文件
+set hive.merge.mapredfiles = false               ## true 时在 MapReduce 的任务结束时合并小文件
+set hive.merge.size.per.task = 256*1000*1000     ##合并文件的大小
+set mapred.max.split.size=256000000;             ##每个 Map 最大分割大小
+set mapred.min.split.size.per.node=1;            ##一个节点上 split 的最少值
+set hive.input.format=org.apache.hadoop.hive.ql.io.CombineHiveInputFormat;    ##执行Map前进行小文件合并
+```
+
+### 11. 合理控制reduce个数
+
+根据以下三个参数推断reduce个数
+
+- 手动指定reducer个数，如`set mapred.reduce.tasks=10`
+- 由公式`Reducer个数N=min(hive.exec.reducers.max，totalSize/hive.exec.reducers.bytes.per.reducer)`调整，当上面的参数为负数时使用
+
+```xml
+  <property>
+    <!--每个reducer处理多少字节-->
+    <name>hive.exec.reducers.bytes.per.reducer</name>
+    <value>256000000</value>
+    <description>size per reducer.The default is 256Mb, i.e if the input size is 1G, it will use 4 reducers.</description>
+  </property>
+  <property>
+    <!--最多多少reducer-->
+    <name>hive.exec.reducers.max</name>
+    <value>1009</value>
+    <description>
+      max number of reducers will be used. If the one specified in the configuration parameter mapred.reduce.tasks is
+      negative, Hive will use this one as the max number of reducers when automatically determine number of reducers.
+    </description>
+  </property>
+
+mapred.reduce.tasks=-1（Hive 1.1.0中是mapreduce.job.reduces，不过已被禁用）（设置一个指定 reduce task数量，Hive默认是-1，Hadoop默认是1，负数时Hive会自动根据上面两个参数推断Reducer数）
+```
+> 参考别人的博客：
+> 依据 Hadoop 的经验，可以将参数 2 设定为 0.95*(集群中 datanode 个数)。 
+
+
+>reducer个数并不是越多越好
+>
+>1）过多的启动和初始化reduce也会消耗时间和资源；
+2）另外，有多少个reduce，就会有多少个输出文件，如果生成了很多个小文件，那么如果这些小文件作为下一个任务的输入，则也会出现小文件过多的问题；
+在设置reduce个数的时候也需要考虑这两个原则：处理大数据量利用合适的reduce数；使单个reduce任务处理数据量大小要合适；
+
+### 12. JVM重用
+该参数是在hadoop的mapred-site.xml中配置的，可通过`set  mapred.job.reuse.jvm.num.tasks=N;`指定，N指的是一个JVM实例在同一个Job中被使用N次，适合tasks非常多且执行时间短的场景
+
+JVM重用也有缺点，开启JVM重用将一直占用使用到的task插槽，以便进行重用，直到任务完成后才能释放。如果某个“不平衡的”job中有某几个reduce task执行的时间要比其他Reduce task消耗的时间多的多的话，那么保留的插槽就会一直空闲着却无法被其他的job使用，直到所有的task都结束了才会释放
+
+### 13. 并行执行
+当某些Jobs中有些task不存在依赖关系时，就可以并行执行来减少Job的时间，当然还要保证资源足够的情况
+```xml
+<property>
+    <name>hive.exec.parallel</name>
+    <!--默认false-->
+    <value>false</value>
+    <description>Whether to execute jobs in parallel</description>
+  </property>
+  <property>
+    <!--最大并行度，默认8-->
+    <name>hive.exec.parallel.thread.number</name>
+    <value>8</value>
+    <description>How many jobs at most can be executed in parallel</description>
+  </property>
+```
+```
+set hive.exec.parallel=true;
+set hibe.exec.parallel.thread.number=16;
+```
