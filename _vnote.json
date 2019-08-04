@@ -34,6 +34,9 @@
         },
         {
             "name": "ZooKeeper"
+        },
+        {
+            "name": "Kudu+Impala"
         }
     ],
     "version": "1"

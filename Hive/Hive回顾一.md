@@ -87,7 +87,7 @@ create [TEMPORARY] [EXTERNAL] table [if not exists] [db_name.]table_name(
 row format delimited	//定义加载数据的格式化
 fields terminated by 'char'	//字段用char分隔
 collection items terminated by 'char'	//array集合中数据用char分隔
-map keys termianted by 'char'	//map中k-v用char分隔
+map keys terminated by 'char'	//map中k-v用char分隔
 lines terminated by 'char'	//行用char分隔
 NULL defined as 'char'	//空缺值用char代替
 

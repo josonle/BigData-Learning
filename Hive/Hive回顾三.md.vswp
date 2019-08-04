@@ -1,3 +1,4 @@
+vnote_backup_file_826537664 /home/josonlee/Git-Repositories/BigData_Learning/Hive/Hive回顾三.md
 # Hive回顾三
 ## explain 查看执行计划
 同MySQL一样，就是在Hql语句前加上explain关键字

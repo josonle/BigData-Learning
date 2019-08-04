@@ -18,6 +18,12 @@
         },
         {
             "name": "Spark SQL"
+        },
+        {
+            "name": "Spark Streaming"
+        },
+        {
+            "name": "Structured Streaming"
         }
     ],
     "version": "1"
